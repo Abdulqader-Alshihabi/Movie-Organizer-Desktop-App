@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ProfileSelector</class>
+ <widget class="QDialog" name="ProfileSelector">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1080</width>
+    <height>720</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Select Profile</string>
+  </property>
+  <property name="styleSheet">
+   <string>
+    QDialog { background-color: #1a1a1a; }
+    QLabel#titleLabel { color: white; font-size: 20px; font-weight: bold; }
+    QPushButton {
+        background-color: #555;
+        color: white;
+        border-radius: 8px;
+        padding: 10px;
+        font-weight: bold;
+        font-size: 14px;
+    }
+    QPushButton:hover { background-color: #666; }
+    
+    QPushButton#editProfilesButton {
+        background-color: transparent;
+        border: 1px solid #888;
+    }
+    QPushButton#editProfilesButton:hover {
+        background-color: #222;
+        border: 1px solid #aaa;
+    }
+    QScrollArea { background-color: transparent; border: none; }
+    QWidget#profileContainer { background-color: transparent; }
+
+    /* --- STYLES FOR DYNAMIC PROFILE CARDS --- */ 
+    QFrame#profileCard {
+        background-color: #222;
+        border-radius: 10px;
+    }
+    QFrame#profileCard:hover {
+        background-color: #333;
+    }
+    QLabel#profilePic { 
+        color: gray;
+        font-size: 16px;
+        border: 1px solid #444;
+        border-radius: 10px;
+        background-color: #111;
+    }
+    QLabel#profileName { 
+        color: white;
+        font-weight: bold;
+        font-size: 14px;
+    }
+    QLabel#editOverlay { 
+        background-color: rgba(0, 0, 0, 0.6);
+        color: white;
+        font-size: 60px;
+        border-radius: 10px;
+    }
+    /* --- END DYNAMIC STYLES --- */
+
+   </string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QLabel" name="titleLabel">
+     <property name="text">
+      <string>Who's watching?</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QScrollArea" name="profileScrollArea">
+     <property name="widgetResizable">
+      <bool>true</bool>
+     </property>
+     <widget class="QWidget" name="profileContainer">
+      <property name="geometry">
+       <rect>
+        <x>0</x>
+        <y>0</y>
+        <width>1058</width>
+        <height>619</height>
+       </rect>
+      </property>
+      <layout class="QGridLayout" name="profileGrid"/>
+     </widget>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="buttonLayout">
+     <item>
+      <spacer name="horizontalSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="editProfilesButton">
+       <property name="text">
+        <string>Edit Profiles</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="addProfileButton">
+       <property name="text">
+        <string>Add Profile</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="horizontalSpacer_2">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MovieOrganizer</class>
+ <widget class="QMainWindow" name="MovieOrganizer">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>900</width>
+    <height>600</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Movie Collection Organizer</string>
+  </property>
+  <property name="styleSheet"><string>
+QMainWindow { background-color: #1a1a1a; }
+QLineEdit, QComboBox {
+    background-color: #333;
+    color: white;
+    border-radius: 6px;
+    padding: 6px;
+    font-size: 13px;
+}
+QPushButton {
+    background-color: #4CAF50;
+    color: white;
+    border-radius: 8px;
+    padding: 8px;
+    font-weight: bold;
+    font-size: 13px;
+}
+QPushButton#editButton, QPushButton#deleteButton {
+    background-color: #555;
+}
+QPushButton:hover {
+    background-color: #45a049;
+}
+QPushButton#editButton:hover, QPushButton#deleteButton:hover {
+    background-color: #666;
+}
+QLabel {
+    color: white;
+    font-size: 14px;
+}
+QScrollArea {
+    background-color: transparent;
+    border: none;
+}
+QWidget#carouselContainer {
+    background-color: transparent;
+}
+QLabel#movieDetailsLabel {
+    color:white;
+    font-size:14px;
+    padding:10px;
+    background-color: #222;
+    border-radius: 8px;
+}
+
+/* --- STYLES FOR DYNAMIC MOVIE CARDS --- */
+QFrame#movieCard { <!-- line 388 in movie_organizer.py -->
+    background: #222;
+    border-radius: 10px;
+}
+QLabel#moviePoster { <!-- line 396 in movie_organizer.py -->
+    color: gray;
+    background-color: #111;
+    border-radius: 5px;
+    min-height: 160px; /* Ensure space for poster */
+}
+QLabel#movieTitle { <!-- line 401 in movie_organizer.py -->
+    color: white;
+    font-weight: bold;
+}
+QLabel#movieRating { <!-- line 405 in movie_organizer.py -->
+    color: gold;
+}
+/* Style for when a card is selected */
+QFrame#movieCard[selected="true"] {
+    background: #444;
+    border: 2px solid gold;
+    border-radius: 10px;
+}
+/* --- END DYNAMIC STYLES --- */
+
+</string></property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout">
+
+    <!-- Top bar -->
+    <item>
+     <layout class="QHBoxLayout" name="topBarLayout" >
+      <item>
+       <widget class="QLineEdit" name="searchEdit">
+        <property name="placeholderText">
+         <string>Search movies...</string>
+        </property>
+       </widget>
+      </item>
+
+      <item>
+       <widget class="QComboBox" name="genreCombo"/>
+      </item>
+
+      <item>
+       <widget class="QComboBox" name="sortCombo">
+        <property name="toolTip"><string>Sort Movies By</string></property>
+       </widget>
+      </item>
+
+      <item><widget class="QPushButton" name="addButton">
+        <property name="text"><string>Add Movie</string></property>
+       </widget></item>
+      <item><widget class="QPushButton" name="editButton">
+        <property name="text"><string>Edit</string></property>
+       </widget></item>
+      <item><widget class="QPushButton" name="deleteButton">
+        <property name="text"><string>Delete</string></property>
+       </widget></item>
+     </layout>
+    </item>
+
+    <!-- Carousel Section -->
+    <item>
+     <widget class="QScrollArea" name="scrollArea">
+      <property name="widgetResizable">
+       <bool>true</bool>
+      </property>
+      <widget class="QWidget" name="carouselContainer">
+       <layout class="QHBoxLayout" name="carouselLayout">
+        <property name="spacing">
+         <number>20</number>
+        </property>
+        <item>
+         <spacer name="horizontalSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </widget>
+     </widget>
+    </item>
+
+    <!-- Bottom Details -->
+    <item>
+     <widget class="QLabel" name="movieDetailsLabel">
+      <property name="text">
+       <string>Select a movie to view details</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
+      </property>
+     </widget>
+    </item>
+
+   </layout>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
