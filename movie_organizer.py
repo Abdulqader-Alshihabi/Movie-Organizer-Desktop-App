@@ -24,32 +24,49 @@ class AuthManager:
 
     def register_user(self, password, fullname, email, profile_pic):
         email_to_insert = email if email else None # to have option of not providing an email
-        cur = self.db.execute("SELECT id FROM users WHERE email=?", (email_to_insert,))
-        if cur.fetchone(): # fetch an existing email of the specified id if exist do
-            return False, "Email already exists! Please use a different one."
+        if email_to_insert:
+            cur = self.db.execute("SELECT id FROM users WHERE email=?", (email_to_insert,))
+            if cur.fetchone(): # fetch an existing email of the specified id if exist do
+                return False, "Email already exists! Please use a different one."
         try:
+            pw_to_insert = self.hash_password(password) if password else ""
             self.db.execute(
                 "INSERT INTO users (password, fullname, email, profile_pic) VALUES (?,?,?,?)",
-                (self.hash_password(password), fullname, email_to_insert, profile_pic)
+                (pw_to_insert, fullname, email_to_insert, profile_pic)
             )
             self.db.commit()
             return True, "Profile created successfully!"
         except sqlite3.IntegrityError as e:
-            return False, e
+            return False, str(e)
 
     def check_password(self, user_id, password):
-        cur = self.db.execute("SELECT id, fullname FROM users WHERE id=? AND password=?", (user_id, self.hash_password(password)) )
-        row = cur.fetchone() # (id, fullname)
-        if row:
-            self.current_user_id, self.fullname = row
+        cur = self.db.execute("SELECT id, fullname, password FROM users WHERE id=?", (user_id,))
+        row = cur.fetchone()
+        if not row:
+            return False, "User not found!"
+        uid, fullname, pw_hash = row
+        if pw_hash and self.hash_password(password) == pw_hash:
+            self.current_user_id, self.fullname = uid, fullname
             return True, "Login successful!"
         return False, "Invalid password!"
+
+    def login_without_password(self, user_id):
+        cur = self.db.execute("SELECT id, fullname, password FROM users WHERE id=?", (user_id,))
+        row = cur.fetchone()
+        if not row:
+            return False, "User not found!"
+        uid, fullname, pw = row
+        if not pw: # No password associated with the account
+            self.current_user_id = uid
+            self.fullname = fullname
+            return True, "Login successful!"
+        return False, "This profile requires a password!"
 
     def logout(self):
         self.current_user_id = None
         self.fullname = None
 
-    def update_user(self, user_id, fullname, email, profile_pic, new_password_hash=None):
+    def update_user(self, user_id, fullname, email, profile_pic, new_password_hash=None, remove_password=False):
         email_to_insert = email if email else None
         
         if email_to_insert: # email validation
@@ -58,7 +75,12 @@ class AuthManager:
                 return False, "Email already exists on another profile!"
 
         try:
-            if new_password_hash:
+            if remove_password:
+                self.db.execute(
+                    "UPDATE users SET fullname=?, email=?, profile_pic=?, password='' WHERE id=?",
+                    (fullname, email_to_insert, profile_pic, user_id)
+                )
+            elif new_password_hash is not None and new_password_hash != "":
                 self.db.execute(
                     "UPDATE users SET fullname=?, email=?, profile_pic=?, password=? WHERE id=?",
                     (fullname, email_to_insert, profile_pic, new_password_hash, user_id)
@@ -70,6 +92,14 @@ class AuthManager:
                 )
             self.db.commit()
             return True, "Profile updated successfully!"
+        except sqlite3.Error as e:
+            return False, f"Database error: {e}"
+
+    def remove_password(self, user_id):
+        try:
+            self.db.execute("UPDATE users SET password='' WHERE id=?", (user_id,))
+            self.db.commit()
+            return True, "Password removed successfully!"
         except sqlite3.Error as e:
             return False, f"Database error: {e}"
 
@@ -109,12 +139,13 @@ class RegisterDialog(QtWidgets.QDialog):
         conf = self.confirmEdit.text()
         pic = self.profilePath.text()
 
-        if not full or not pw: # fullname & password are required fields
-            return show_warning(self, "Please fill in Full Name and Password!")
-        if pw != conf: # password validation
-            return show_warning(self, "Passwords do not match!")
-        if len(pw) < 6: # password length must be > 6
-            return show_warning(self, "Password must be at least 6 characters!")
+        if not full: # fullname is a required field
+            return show_warning(self, "Please fill in Full Name!")
+        if pw or conf: # password validation if provided
+            if pw != conf:
+                return show_warning(self, "Passwords do not match!")
+            if len(pw) < 6:
+                return show_warning(self, "Password must be at least 6 characters!")
         
         success, msg = self.auth.register_user(pw, full, email, pic)
         
@@ -139,15 +170,25 @@ class EditProfileDialog(QtWidgets.QDialog):
         self.emailEdit.setText(user_data.get("email", ""))
         self.profilePath.setText(user_data.get("profile_pic", ""))
         
-        self.passwordEdit.setPlaceholderText("New Password (leave blank to keep same)")
-        self.confirmEdit.setPlaceholderText("Confirm New Password")
+        self.has_password = bool(user_data.get("password"))
+        if self.has_password:
+            self.passwordEdit.setPlaceholderText("New Password (leave blank to keep current)")
+            self.confirmEdit.setPlaceholderText("Confirm New Password")
+            
+            self.removePassBtn = QtWidgets.QPushButton("Remove Password")
+            self.removePassBtn.setObjectName("removePassBtn")
+            self.removePassBtn.clicked.connect(self.remove_password)
+            
+            idx = self.verticalLayout.indexOf(self.confirmEdit)
+            if idx != -1:
+                self.verticalLayout.insertWidget(idx + 1, self.removePassBtn)
+        else:
+            self.passwordEdit.setPlaceholderText("Set Password (Optional, min. 6 characters)")
+            self.confirmEdit.setPlaceholderText("Confirm Password")
         
         self.registerBtn.setText("Save Changes")
-        
         self.registerBtn.clicked.connect(self.save_changes)
-        
         self.backBtn.clicked.connect(self.reject)
-        
         self.browseBtn.clicked.connect(lambda: browse_file(self.profilePath, self)) # pic browse for edit profile
         
         self.deleteBtn = QtWidgets.QPushButton("Delete Profile")
@@ -157,6 +198,27 @@ class EditProfileDialog(QtWidgets.QDialog):
         
         # Add button to the layout named "buttonLayout" in the .ui file
         self.buttonLayout.insertWidget(0, self.deleteBtn)
+
+    def remove_password(self):
+        reply = QtWidgets.QMessageBox.question(
+            self, 'Confirm Remove Password',
+            f"Are you sure you want to remove the password for '{self.user_data['fullname']}'?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No
+        )
+        if reply == QtWidgets.QMessageBox.Yes:
+            full = self.fullnameEdit.text().strip()
+            email = self.emailEdit.text().strip()
+            pic = self.profilePath.text()
+            if not full:
+                return show_warning(self, "Full Name cannot be empty!")
+            success, msg = self.auth.update_user(self.user_id, full, email, pic, remove_password=True)
+            if success:
+                self.user_data["password"] = ""
+                QtWidgets.QMessageBox.information(self, "Success", "Password removed successfully!")
+                self.accept()
+            else:
+                show_warning(self, msg)
 
     def delete_profile(self):
         reply = QtWidgets.QMessageBox.question(
@@ -233,6 +295,31 @@ class PasswordEntryDialog(QtWidgets.QDialog):
             show_warning(self, msg)
             self.passwordEdit.clear()
 
+# ----------------------[ Confirm Login Dialog (No Password) ]---------------------- #
+class ConfirmLoginDialog(QtWidgets.QDialog):
+    def __init__(self, auth_manager, user_id, fullname, profile_pic_path):
+        super().__init__()
+        uic.loadUi("confirm_login.ui", self)
+        self.auth = auth_manager
+        self.user_id = user_id
+
+        self.nameLabel.setText(fullname)
+        if profile_pic_path and os.path.exists(profile_pic_path):
+            pix = QtGui.QPixmap(profile_pic_path).scaled(150, 150, QtCore.Qt.KeepAspectRatioByExpanding, QtCore.Qt.SmoothTransformation)
+            self.picLabel.setPixmap(pix)
+            self.picLabel.setText("")
+        
+        self.continueBtn.clicked.connect(self.confirm_login)
+        self.cancelBtn.clicked.connect(self.reject)
+        self.continueBtn.setDefault(True)
+
+    def confirm_login(self):
+        success, msg = self.auth.login_without_password(self.user_id)
+        if success:
+            self.accept()
+        else:
+            show_warning(self, msg)
+
 # ----------------------[ Clickable Profile Card ]---------------------- #
 class ClickableProfileCard(QtWidgets.QFrame):
     clicked = QtCore.pyqtSignal(dict)
@@ -242,53 +329,117 @@ class ClickableProfileCard(QtWidgets.QFrame):
         super().__init__()
         self.user_data = user_data
         self.is_in_edit_mode = False
+        self.normal_size = 130
+        self.hover_size = 144
         
         # Set object name to pick up style from welcome.ui
         self.setObjectName("profileCard")
-        self.setFixedSize(150, 200)
+        self.setFixedSize(160, 210)
         self.setCursor(QtCore.Qt.PointingHandCursor)
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setAlignment(QtCore.Qt.AlignCenter)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(10)
         
-        picContainer = QtWidgets.QFrame(self)
-        picContainer.setFixedSize(120, 120)
-        # This container is just for layout, no style needed
+        # Outer container keeping card dimensions stable during avatar animation
+        self.picContainer = QtWidgets.QWidget(self)
+        self.picContainer.setFixedSize(150, 150)
         
-        self.picLabel = QtWidgets.QLabel(picContainer)
-        self.picLabel.setObjectName("profilePic") # Set object name
-        self.picLabel.setFixedSize(120, 120)
+        # Inner avatar frame that animates and scales (Netflix style)
+        self.avatarBox = QtWidgets.QFrame(self.picContainer)
+        self.avatarBox.setObjectName("avatarBox")
+        offset = (150 - self.normal_size) // 2
+        self.avatarBox.setGeometry(offset, offset, self.normal_size, self.normal_size)
+        
+        self.stackLayout = QtWidgets.QStackedLayout(self.avatarBox)
+        self.stackLayout.setStackingMode(QtWidgets.QStackedLayout.StackAll)
+        
+        self.picLabel = QtWidgets.QLabel(self.avatarBox)
+        self.picLabel.setObjectName("profilePic")
         self.picLabel.setAlignment(QtCore.Qt.AlignCenter)
+        self.picLabel.setScaledContents(True)
         self.updatePicture(user_data.get("profile_pic", ""))
         
-        self.editOverlay = QtWidgets.QLabel(picContainer)
-        self.editOverlay.setObjectName("editOverlay") # Set object name
-        self.editOverlay.setFixedSize(120, 120)
-        self.editOverlay.setText("✏️")
+        self.editOverlay = QtWidgets.QLabel("✏️", self.avatarBox)
+        self.editOverlay.setObjectName("editOverlay")
         self.editOverlay.setAlignment(QtCore.Qt.AlignCenter)
         self.editOverlay.setVisible(False)
         
-        layout.addWidget(picContainer)
+        self.stackLayout.addWidget(self.picLabel)
+        self.stackLayout.addWidget(self.editOverlay)
+        
+        # Netflix-style glow / drop shadow
+        self.shadow = QtWidgets.QGraphicsDropShadowEffect(self.avatarBox)
+        self.shadow.setBlurRadius(15)
+        self.shadow.setColor(QtGui.QColor(0, 0, 0, 160))
+        self.shadow.setOffset(0, 4)
+        self.avatarBox.setGraphicsEffect(self.shadow)
+        
+        layout.addWidget(self.picContainer, alignment=QtCore.Qt.AlignCenter)
 
         self.nameLabel = QtWidgets.QLabel(user_data["fullname"])
-        self.nameLabel.setObjectName("profileName") # Set object name
+        self.nameLabel.setObjectName("profileName")
         self.nameLabel.setAlignment(QtCore.Qt.AlignCenter)
         self.nameLabel.setWordWrap(True)
-        layout.addWidget(self.nameLabel)
+        layout.addWidget(self.nameLabel, alignment=QtCore.Qt.AlignCenter)
+        
+        # Smooth Netflix scale animation
+        self.scaleAnim = QtCore.QPropertyAnimation(self.avatarBox, b"geometry")
+        self.scaleAnim.setDuration(160)
+        self.scaleAnim.setEasingCurve(QtCore.QEasingCurve.OutCubic)
 
     def updatePicture(self, path):
         if path and os.path.exists(path):
-            pix = QtGui.QPixmap(path).scaled(120, 120, QtCore.Qt.KeepAspectRatioByExpanding, QtCore.Qt.SmoothTransformation)
+            pix = QtGui.QPixmap(path).scaled(150, 150, QtCore.Qt.KeepAspectRatioByExpanding, QtCore.Qt.SmoothTransformation)
             self.picLabel.setPixmap(pix)
             self.picLabel.setText("") # Clear [No Pic] text
         else:
             self.picLabel.setPixmap(QtGui.QPixmap()) # Clear pixmap
             self.picLabel.setText("[No Pic]")
 
+    def enterEvent(self, e):
+        self.scaleAnim.stop()
+        hover_offset = (150 - self.hover_size) // 2
+        self.scaleAnim.setStartValue(self.avatarBox.geometry())
+        self.scaleAnim.setEndValue(QtCore.QRect(hover_offset, hover_offset, self.hover_size, self.hover_size))
+        self.scaleAnim.start()
+        
+        self.avatarBox.setProperty("hovered", True)
+        self.avatarBox.style().unpolish(self.avatarBox)
+        self.avatarBox.style().polish(self.avatarBox)
+        
+        self.nameLabel.setProperty("hovered", True)
+        self.nameLabel.style().unpolish(self.nameLabel)
+        self.nameLabel.style().polish(self.nameLabel)
+        
+        self.shadow.setColor(QtGui.QColor(255, 255, 255, 90))
+        self.shadow.setBlurRadius(25)
+        super().enterEvent(e)
+
+    def leaveEvent(self, e):
+        self.scaleAnim.stop()
+        normal_offset = (150 - self.normal_size) // 2
+        self.scaleAnim.setStartValue(self.avatarBox.geometry())
+        self.scaleAnim.setEndValue(QtCore.QRect(normal_offset, normal_offset, self.normal_size, self.normal_size))
+        self.scaleAnim.start()
+        
+        self.avatarBox.setProperty("hovered", False)
+        self.avatarBox.style().unpolish(self.avatarBox)
+        self.avatarBox.style().polish(self.avatarBox)
+        
+        self.nameLabel.setProperty("hovered", False)
+        self.nameLabel.style().unpolish(self.nameLabel)
+        self.nameLabel.style().polish(self.nameLabel)
+        
+        self.shadow.setColor(QtGui.QColor(0, 0, 0, 160))
+        self.shadow.setBlurRadius(15)
+        super().leaveEvent(e)
+
     def setEditMode(self, is_edit):
         self.is_in_edit_mode = is_edit
         self.editOverlay.setVisible(is_edit)
-        self.setCursor(QtCore.Qt.PointingHandCursor) # Cursor is always hand
+        self.setCursor(QtCore.Qt.PointingHandCursor)
 
     def mousePressEvent(self, e):
         if self.is_in_edit_mode:
@@ -317,10 +468,10 @@ class ProfileSelectionDialog(QtWidgets.QDialog):
             if widget:
                 widget.deleteLater()
         
-        cur = self.conn.execute("SELECT id, fullname, profile_pic, email FROM users")
+        cur = self.conn.execute("SELECT id, fullname, profile_pic, email, password FROM users")
         row, col = 0, 0
-        for uid, fullname, profile_pic, email in cur:
-            data = {"id": uid, "fullname": fullname, "profile_pic": profile_pic, "email": email}
+        for uid, fullname, profile_pic, email, password in cur:
+            data = {"id": uid, "fullname": fullname, "profile_pic": profile_pic, "email": email, "password": password}
             card = ClickableProfileCard(data)
             
             card.clicked.connect(self.profile_clicked)
@@ -328,15 +479,14 @@ class ProfileSelectionDialog(QtWidgets.QDialog):
             
             card.setEditMode(self.is_edit_mode) 
             
-            self.profileGrid.addWidget(card, row, col)
+            self.profileGrid.addWidget(card, row, col, QtCore.Qt.AlignCenter)
             col += 1
             if col > 3:
                 col = 0
                 row += 1
         
-        # Add a spacer to push cards to the left idk how it works tbh
+        # Add a spacer to push cards to the left
         self.profileGrid.addItem(QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum), 0, col, -1, -1)
-
 
     def toggle_edit_mode(self):
         self.is_edit_mode = not self.is_edit_mode
@@ -362,12 +512,21 @@ class ProfileSelectionDialog(QtWidgets.QDialog):
             self.load_profiles()
 
     def profile_clicked(self, user_data):
-        dlg = PasswordEntryDialog(
-            self.auth, 
-            user_data["id"], 
-            user_data["fullname"],
-            user_data.get("profile_pic")
-        )
+        has_password = bool(user_data.get("password"))
+        if has_password:
+            dlg = PasswordEntryDialog(
+                self.auth, 
+                user_data["id"], 
+                user_data["fullname"],
+                user_data.get("profile_pic")
+            )
+        else:
+            dlg = ConfirmLoginDialog(
+                self.auth,
+                user_data["id"],
+                user_data["fullname"],
+                user_data.get("profile_pic")
+            )
         if dlg.exec_() == QtWidgets.QDialog.Accepted:
             self.accept()
 
@@ -383,44 +542,105 @@ class ClickableMovieCard(QtWidgets.QFrame):
     def __init__(self, movie):
         super().__init__()
         self.movie_data = movie
+        self.is_selected = False
         
         # Set object name to pick up style from movie_organizer.ui
         self.setObjectName("movieCard")
-        self.setFixedSize(150,220)
+        self.setFixedSize(155, 235)
         self.setFrameShape(QtWidgets.QFrame.StyledPanel)
+        self.setCursor(QtCore.Qt.PointingHandCursor)
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setAlignment(QtCore.Qt.AlignTop)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
         
-        self.poster_label = QtWidgets.QLabel()
-        self.poster_label.setObjectName("moviePoster") # Set object name
+        # Poster container with stacked layout for interactive play overlay
+        self.posterContainer = QtWidgets.QFrame(self)
+        self.posterContainer.setFixedSize(139, 168)
+        self.posterLayout = QtWidgets.QStackedLayout(self.posterContainer)
+        self.posterLayout.setStackingMode(QtWidgets.QStackedLayout.StackAll)
+        
+        self.poster_label = QtWidgets.QLabel(self.posterContainer)
+        self.poster_label.setObjectName("moviePoster")
         self.poster_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.poster_label.setScaledContents(True)
         self.updatePoster()
         
+        self.playOverlay = QtWidgets.QLabel("▶", self.posterContainer)
+        self.playOverlay.setObjectName("playOverlay")
+        self.playOverlay.setAlignment(QtCore.Qt.AlignCenter)
+        self.playOverlay.setVisible(False)
+        
+        self.posterLayout.addWidget(self.poster_label)
+        self.posterLayout.addWidget(self.playOverlay)
+        layout.addWidget(self.posterContainer)
+        
         self.title_label = QtWidgets.QLabel(movie["title"])
-        self.title_label.setObjectName("movieTitle") # Set object name
+        self.title_label.setObjectName("movieTitle")
         self.title_label.setAlignment(QtCore.Qt.AlignCenter)
         self.title_label.setWordWrap(True)
         
         self.rating_label = QtWidgets.QLabel(f"⭐ {movie['rating']}")
-        self.rating_label.setObjectName("movieRating") # Set object name
+        self.rating_label.setObjectName("movieRating")
         self.rating_label.setAlignment(QtCore.Qt.AlignCenter)
         
-        layout.addWidget(self.poster_label)
         layout.addWidget(self.title_label)
         layout.addWidget(self.rating_label)
-        layout.addStretch() # Pushes content to top
+        layout.addStretch()
+
+        # Drop shadow effect for interactive depth
+        self.shadow = QtWidgets.QGraphicsDropShadowEffect(self)
+        self.shadow.setBlurRadius(12)
+        self.shadow.setOffset(0, 3)
+        self.shadow.setColor(QtGui.QColor(0, 0, 0, 140))
+        self.setGraphicsEffect(self.shadow)
+
+        self.setToolTip(f"{movie['title']} ({movie.get('year', '')})\nGenre: {movie.get('genre', '')}\nRating: ⭐ {movie.get('rating', '')}")
 
     def updatePoster(self):
         path = self.movie_data.get("poster","")
         if path and os.path.exists(path):
-            pix = QtGui.QPixmap(path).scaled(120,160,QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
+            pix = QtGui.QPixmap(path).scaled(140, 170, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
             self.poster_label.setPixmap(pix)
             self.poster_label.setText("")
         else:
             self.poster_label.setPixmap(QtGui.QPixmap())
             self.poster_label.setText("[Poster]")
-        # No setStyleSheet needed
+
+    def enterEvent(self, e):
+        self.playOverlay.setVisible(True)
+        if not self.is_selected:
+            self.shadow.setColor(QtGui.QColor(229, 9, 20, 140)) # Netflix red ambient glow
+            self.shadow.setBlurRadius(24)
+            self.shadow.setOffset(0, 6)
+        super().enterEvent(e)
+
+    def leaveEvent(self, e):
+        self.playOverlay.setVisible(False)
+        if not self.is_selected:
+            self.shadow.setColor(QtGui.QColor(0, 0, 0, 140))
+            self.shadow.setBlurRadius(12)
+            self.shadow.setOffset(0, 3)
+        else:
+            self.shadow.setColor(QtGui.QColor(245, 197, 24, 180)) # Gold glow when selected
+            self.shadow.setBlurRadius(20)
+            self.shadow.setOffset(0, 4)
+        super().leaveEvent(e)
+
+    def setSelected(self, selected):
+        self.is_selected = selected
+        self.setProperty("selected", selected)
+        if selected:
+            self.shadow.setColor(QtGui.QColor(245, 197, 24, 180)) # Gold glow
+            self.shadow.setBlurRadius(22)
+            self.shadow.setOffset(0, 4)
+        else:
+            self.shadow.setColor(QtGui.QColor(0, 0, 0, 140))
+            self.shadow.setBlurRadius(12)
+            self.shadow.setOffset(0, 3)
+        self.style().unpolish(self)
+        self.style().polish(self)
 
     def mousePressEvent(self, e): 
         self.clicked.emit(self.movie_data)
@@ -543,15 +763,12 @@ class MovieCarousel(QtWidgets.QMainWindow):
         self.selected_movie_id=movie["id"]
         self.movieDetailsLabel.setText(f"<b>{movie['title']}</b> ({movie['year']})<br>Genre: {movie['genre']}<br>Rating: ⭐ <b>{movie['rating']}</b>")
 
-        # Use dynamic properties and stylesheet polishing instead of setStyleSheet
+        # Update selection state and interactive effects
         for i in range(self.carouselLayout.count()):
             w=self.carouselLayout.itemAt(i).widget()
             if isinstance(w,ClickableMovieCard):
                 is_selected = (w.movie_data["id"] == movie["id"])
-                w.setProperty("selected", is_selected)
-                # Re-apply style to update based on the 'selected' property
-                w.style().unpolish(w)
-                w.style().polish(w)
+                w.setSelected(is_selected)
 
 # ---------------------------[ MAIN ]--------------------------- #
 def main():

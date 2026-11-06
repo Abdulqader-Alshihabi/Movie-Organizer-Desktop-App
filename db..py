@@ -8,7 +8,7 @@ cur.execute("DROP TABLE IF EXISTS users;")
 cur.execute("""
 CREATE TABLE users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    password TEXT NOT NULL,
+    password TEXT DEFAULT '',
     fullname TEXT NOT NULL,
     email TEXT UNIQUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

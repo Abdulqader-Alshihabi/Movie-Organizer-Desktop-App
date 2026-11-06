@@ -20,6 +20,15 @@ QPushButton#deleteBtn {
 QPushButton#deleteBtn:hover {
     background-color: #c9302c;
 }
+
+/* --- Style for Remove Password Button --- */
+QPushButton#removePassBtn {
+    background-color: #d97706;
+    color: white;
+}
+QPushButton#removePassBtn:hover {
+    background-color: #b45309;
+}
 </string></property>
   <layout class="QVBoxLayout" name="verticalLayout">
 
@@ -32,12 +41,12 @@ QPushButton#deleteBtn:hover {
    </widget></item>
 
    <item><widget class="QLineEdit" name="passwordEdit">
-     <property name="placeholderText"><string>Password (min. 6 characters)</string></property>
+     <property name="placeholderText"><string>Password (Optional, min. 6 characters)</string></property>
      <property name="echoMode"><enum>QLineEdit::Password</enum></property>
    </widget></item>
 
    <item><widget class="QLineEdit" name="confirmEdit">
-     <property name="placeholderText"><string>Confirm Password</string></property>
+     <property name="placeholderText"><string>Confirm Password (Optional)</string></property>
      <property name="echoMode"><enum>QLineEdit::Password</enum></property>
    </widget></item>
 

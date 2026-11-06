@@ -59,28 +59,49 @@ QLabel#movieDetailsLabel {
 }
 
 /* --- STYLES FOR DYNAMIC MOVIE CARDS --- */
-QFrame#movieCard { <!-- line 388 in movie_organizer.py -->
-    background: #222;
+QFrame#movieCard {
+    background: #1e1e1e;
+    border: 2px solid transparent;
     border-radius: 10px;
 }
-QLabel#moviePoster { <!-- line 396 in movie_organizer.py -->
-    color: gray;
-    background-color: #111;
-    border-radius: 5px;
-    min-height: 160px; /* Ensure space for poster */
+QFrame#movieCard:hover {
+    background: #282828;
+    border: 2px solid #e50914;
 }
-QLabel#movieTitle { <!-- line 401 in movie_organizer.py -->
-    color: white;
-    font-weight: bold;
-}
-QLabel#movieRating { <!-- line 405 in movie_organizer.py -->
-    color: gold;
-}
-/* Style for when a card is selected */
 QFrame#movieCard[selected="true"] {
-    background: #444;
-    border: 2px solid gold;
+    background: #2f2f2f;
+    border: 2px solid #f5c518;
     border-radius: 10px;
+}
+QFrame#movieCard[selected="true"]:hover {
+    background: #383838;
+    border: 2px solid #ffd700;
+}
+QLabel#moviePoster {
+    color: #666;
+    background-color: #111;
+    border-radius: 8px;
+    min-height: 160px;
+}
+QLabel#movieTitle {
+    color: #e5e5e5;
+    font-weight: bold;
+    font-size: 13px;
+    padding: 2px;
+}
+QFrame#movieCard:hover QLabel#movieTitle {
+    color: #ffffff;
+}
+QLabel#movieRating {
+    color: #f5c518;
+    font-weight: 500;
+    font-size: 12px;
+}
+QLabel#playOverlay {
+    background-color: rgba(0, 0, 0, 0.45);
+    color: #ffffff;
+    font-size: 30px;
+    border-radius: 8px;
 }
 /* --- END DYNAMIC STYLES --- */
 
