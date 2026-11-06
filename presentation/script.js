@@ -1,160 +1,253 @@
-const uploadBtn = document.getElementById('uploadBtn');
-const fileInput = document.getElementById('fileInput');
-const viewerContent = document.getElementById('viewerContent');
-const fullscreenBtn = document.getElementById('fullscreenBtn');
-const slideNav = document.getElementById('slideNav');
-const slideCounter = document.getElementById('slideCounter');
-const prevBtn = document.getElementById('prevBtn');
-const nextBtn = document.getElementById('nextBtn');
+// CineVault Interactive Web Application Engine
 
-let currentSlide = 0;
-let slideImages = [];
-let zip = null;
+const initialMovies = [
+    {
+        id: 'interstellar',
+        title: 'Interstellar',
+        genre: 'Sci-Fi',
+        year: 2014,
+        rating: 8.7,
+        poster: 'movie_posters/interstellar.jpg',
+        director: 'Christopher Nolan',
+        description: 'When Earth becomes uninhabitable in the future, a farmer and ex-NASA pilot, Joseph Cooper, is tasked to pilot a spacecraft, along with a team of researchers, to find a new planet for humans.',
+        user: 'abdulqader'
+    },
+    {
+        id: 'inception',
+        title: 'Inception',
+        genre: 'Sci-Fi',
+        year: 2010,
+        rating: 8.8,
+        poster: 'movie_posters/inception.jpg',
+        director: 'Christopher Nolan',
+        description: 'A thief who steals corporate secrets through the use of dream-sharing technology is given the inverse task of planting an idea into the mind of a C.E.O., but his tragic past may doom the project.',
+        user: 'abdulqader'
+    },
+    {
+        id: 'breakingbad',
+        title: 'Breaking Bad',
+        genre: 'Crime',
+        year: 2008,
+        rating: 9.5,
+        poster: 'movie_posters/breakingbad.jpg',
+        director: 'Vince Gilligan',
+        description: 'A chemistry teacher diagnosed with inoperable lung cancer turns to manufacturing and selling methamphetamine with a former student in order to secure his family\'s financial future.',
+        user: 'abdulqader'
+    },
+    {
+        id: 'oppenheimer',
+        title: 'Oppenheimer',
+        genre: 'Biography',
+        year: 2023,
+        rating: 8.9,
+        poster: 'movie_posters/oppenheimer.jpg',
+        director: 'Christopher Nolan',
+        description: 'The story of American scientist J. Robert Oppenheimer and his role in the development of the atomic bomb during World War II.',
+        user: 'abdulqader'
+    },
+    {
+        id: 'joker',
+        title: 'Joker',
+        genre: 'Drama',
+        year: 2019,
+        rating: 8.4,
+        poster: 'movie_posters/joker.jpg',
+        director: 'Todd Phillips',
+        description: 'During the 1980s, a failed stand-up comedian is driven insane and turns to a life of crime and chaos in Gotham City while becoming an infamous psychopathic crime figure.',
+        user: 'abdulqader'
+    },
+    {
+        id: 'thewolfofstreet',
+        title: 'The Wolf of Wall Street',
+        genre: 'Biography',
+        year: 2013,
+        rating: 8.2,
+        poster: 'movie_posters/thewolfofstreet.jpg',
+        director: 'Martin Scorsese',
+        description: 'Based on the true story of Jordan Belfort, from his rise to a wealthy stock-broker living the high life to his fall involving crime, corruption and the federal government.',
+        user: 'abdulqader'
+    }
+];
 
-uploadBtn.addEventListener('click', () => fileInput.click());
+let movies = [...initialMovies];
+let activeProfile = 'abdulqader';
 
-fileInput.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+// DOM Elements
+const moviesGrid = document.getElementById('moviesGrid');
+const searchInput = document.getElementById('searchInput');
+const genreFilter = document.getElementById('genreFilter');
+const sortFilter = document.getElementById('sortFilter');
+const movieModal = document.getElementById('movieModal');
+const modalBody = document.getElementById('modalBody');
+const addModal = document.getElementById('addModal');
+const addMovieBtn = document.getElementById('addMovieBtn');
 
-    if (!file.name.endsWith('.pptx')) {
-        showError('Please select a .pptx file');
+// Initial Render
+renderMovies();
+
+// Event Listeners
+if (searchInput) searchInput.addEventListener('input', renderMovies);
+if (genreFilter) genreFilter.addEventListener('change', renderMovies);
+if (sortFilter) sortFilter.addEventListener('change', renderMovies);
+if (addMovieBtn) addMovieBtn.addEventListener('click', openAddModal);
+
+function renderMovies() {
+    if (!moviesGrid) return;
+
+    let filtered = [...movies];
+    const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+    const selectedGenre = genreFilter ? genreFilter.value : 'all';
+    const selectedSort = sortFilter ? sortFilter.value : 'rating-desc';
+
+    // Search filter
+    if (query) {
+        filtered = filtered.filter(m => 
+            m.title.toLowerCase().includes(query) || 
+            (m.director && m.director.toLowerCase().includes(query)) ||
+            m.genre.toLowerCase().includes(query)
+        );
+    }
+
+    // Genre filter
+    if (selectedGenre !== 'all') {
+        filtered = filtered.filter(m => m.genre.toLowerCase() === selectedGenre.toLowerCase());
+    }
+
+    // Sorting
+    filtered.sort((a, b) => {
+        if (selectedSort === 'rating-desc') return b.rating - a.rating;
+        if (selectedSort === 'year-desc') return b.year - a.year;
+        if (selectedSort === 'year-asc') return a.year - b.year;
+        if (selectedSort === 'title-asc') return a.title.localeCompare(b.title);
+        return 0;
+    });
+
+    if (filtered.length === 0) {
+        moviesGrid.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; padding: 60px 20px; color: #777;">
+                <p style="font-size: 18px; margin-bottom: 8px;">No movies found matching your filter</p>
+                <button class="btn btn-outline" onclick="resetFilters()">Reset Filters</button>
+            </div>
+        `;
         return;
     }
 
-    showLoading();
-    try {
-        const arrayBuffer = await file.arrayBuffer();
-        await parsePPTX(arrayBuffer);
-    } catch (error) {
-        showError(`Error loading file: ${error.message}`);
-        console.error(error);
-    }
-});
-
-async function parsePPTX(arrayBuffer) {
-    try {
-        zip = await JSZip.loadAsync(arrayBuffer);
-        slideImages = [];
-
-        const slidesFolder = zip.folder('ppt/slides');
-        if (!slidesFolder) throw new Error('Invalid PPTX: no slides found');
-
-        const slideFiles = [];
-        slidesFolder.forEach((path, file) => {
-            if (/^slide\d+\.xml$/.test(path)) slideFiles.push({ name: path, file });
-        });
-        slideFiles.sort((a, b) => parseInt(a.name.match(/\d+/)) - parseInt(b.name.match(/\d+/)));
-
-        if (slideFiles.length === 0) throw new Error('No slides found');
-
-        for (let i = 0; i < slideFiles.length; i++) {
-            const slideImage = await extractSlideImage(i + 1);
-            slideImages.push(slideImage);
-        }
-
-        currentSlide = 0;
-        showSlide(currentSlide);
-        slideNav.style.display = 'flex';
-        fullscreenBtn.style.display = 'inline-flex';
-        slideCounter.style.display = 'block';
-        updateSlideCounter();
-    } catch (error) {
-        showError(`Error parsing PPTX: ${error.message}`);
-        console.error(error);
-    }
+    moviesGrid.innerHTML = filtered.map(movie => `
+        <div class="movie-card" onclick="openMovieModal('${movie.id}')">
+            <div class="card-poster-wrap">
+                <img src="${movie.poster}" alt="${movie.title}" class="card-poster" onerror="this.src='movie_posters/inception.jpg'">
+                <div class="card-play-overlay">
+                    <div class="play-circle">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            <div class="card-details">
+                <h3 class="card-title">${movie.title}</h3>
+                <div class="card-meta">
+                    <span style="color: #46d369; font-weight: 700;">★ ${movie.rating}</span>
+                    <span>${movie.year}</span>
+                </div>
+                <span class="card-genre">${movie.genre}</span>
+            </div>
+        </div>
+    `).join('');
 }
 
-async function extractSlideImage(num) {
-    try {
-        const relsPath = `ppt/slides/_rels/slide${num}.xml.rels`;
-        const relsFile = zip.file(relsPath);
-        if (!relsFile) return null;
-
-        const relsContent = await relsFile.async('string');
-        const relsDoc = new DOMParser().parseFromString(relsContent, 'text/xml');
-        const rels = relsDoc.querySelectorAll('Relationship');
-
-        for (const rel of rels) {
-            const type = rel.getAttribute('Type');
-            const target = rel.getAttribute('Target');
-            if (type.includes('image') && target) {
-                const imagePath = target.replace('../', 'ppt/');
-                const imgFile = zip.file(imagePath);
-                if (imgFile) {
-                    const data = await imgFile.async('base64');
-                    const ext = imagePath.split('.').pop();
-                    const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
-                    return `data:${mime};base64,${data}`;
-                }
-            }
-        }
-        return null;
-    } catch (err) {
-        console.error(`Slide ${num} image error:`, err);
-        return null;
-    }
+function resetFilters() {
+    if (searchInput) searchInput.value = '';
+    if (genreFilter) genreFilter.value = 'all';
+    if (sortFilter) sortFilter.value = 'rating-desc';
+    renderMovies();
 }
 
-function showSlide(index) {
-    if (!slideImages.length) return;
-    const img = slideImages[index];
-    viewerContent.innerHTML = img
-        ? `<div class="slide-display"><div class="slide-content"><img src="${img}" alt="Slide ${index + 1}"></div></div>`
-        : `<p style="color:#666;text-align:center;">Slide ${index + 1}<br>No preview</p>`;
-    updateSlideCounter();
+function selectProfile(profileId, name, letter) {
+    activeProfile = profileId;
+    document.querySelectorAll('.profile-card').forEach(card => card.classList.remove('active'));
+    const targetCard = document.querySelector(`[data-profile="${profileId}"]`);
+    if (targetCard) targetCard.classList.add('active');
+
+    const navName = document.getElementById('navProfileName');
+    const navAvatar = document.getElementById('navAvatar');
+    if (navName) navName.textContent = name;
+    if (navAvatar) navAvatar.textContent = letter;
+
+    const subtitle = document.getElementById('collectionSubtitle');
+    if (subtitle) subtitle.textContent = `Viewing ${name}'s personalized movie collection.`;
 }
 
-function updateSlideCounter() {
-    slideCounter.textContent = `Slide ${currentSlide + 1} / ${slideImages.length}`;
+function openMovieModal(movieId) {
+    const movie = movies.find(m => m.id === movieId);
+    if (!movie || !modalBody || !movieModal) return;
+
+    modalBody.innerHTML = `
+        <div style="display: flex; gap: 24px; flex-wrap: wrap;">
+            <img src="${movie.poster}" alt="${movie.title}" style="width: 200px; height: 300px; object-fit: cover; border-radius: 8px;">
+            <div style="flex: 1; min-width: 260px;">
+                <h2 style="font-size: 28px; font-weight: 800; margin-bottom: 8px; color: white;">${movie.title}</h2>
+                <div style="display: flex; gap: 14px; align-items: center; font-size: 14px; margin-bottom: 16px;">
+                    <span style="color: #46d369; font-weight: bold;">★ ${movie.rating} / 10</span>
+                    <span style="color: #aaa;">${movie.year}</span>
+                    <span style="background: rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 4px;">${movie.genre}</span>
+                </div>
+                <p style="color: #bbb; font-size: 14px; line-height: 1.6; margin-bottom: 20px;">${movie.description}</p>
+                <p style="font-size: 13px; color: #888; margin-bottom: 20px;"><strong>Director:</strong> ${movie.director || 'N/A'}</p>
+                <div style="display: flex; gap: 10px;">
+                    <a href="https://github.com/Abdulqader-Alshihabi/Movie-Organizer-Desktop-App" class="btn btn-primary">
+                        View PyQt5 Code
+                    </a>
+                    <button class="btn btn-outline" onclick="deleteMovie('${movie.id}')">
+                        Remove from Library
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    movieModal.classList.add('active');
 }
 
-function showLoading() {
-    viewerContent.innerHTML = '<div class="loading">Loading presentation...</div>';
+function closeMovieModal() {
+    if (movieModal) movieModal.classList.remove('active');
 }
 
-function showError(msg) {
-    viewerContent.innerHTML = `<div class="placeholder"><div class="error-message">${msg}</div></div>`;
+function openAddModal() {
+    if (addModal) addModal.classList.add('active');
 }
 
-prevBtn.addEventListener('click', () => {
-    if (currentSlide > 0) showSlide(--currentSlide);
-});
-nextBtn.addEventListener('click', () => {
-    if (currentSlide < slideImages.length - 1) showSlide(++currentSlide);
-});
+function closeAddModal() {
+    if (addModal) addModal.classList.remove('active');
+}
 
-document.addEventListener('keydown', (e) => {
-    if (!slideImages.length) return;
-    if (e.key === 'ArrowLeft' && currentSlide > 0) showSlide(--currentSlide);
-    if (e.key === 'ArrowRight' && currentSlide < slideImages.length - 1) showSlide(++currentSlide);
-});
+function handleNewMovie(e) {
+    e.preventDefault();
+    const title = document.getElementById('newTitle').value;
+    const genre = document.getElementById('newGenre').value;
+    const year = parseInt(document.getElementById('newYear').value) || 2024;
+    const rating = parseFloat(document.getElementById('newRating').value) || 8.0;
 
-fullscreenBtn.addEventListener('click', () => {
-    if (!document.fullscreenElement) {
-        viewerContent.requestFullscreen();
-        fullscreenBtn.innerHTML = `
-            <svg class="icon" viewBox="0 0 24 24">
-                <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>
-            </svg> Exit Fullscreen`;
-    } else {
-        document.exitFullscreen();
-        fullscreenBtn.innerHTML = `
-            <svg class="icon" viewBox="0 0 24 24">
-                <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
-            </svg> Fullscreen`;
-    }
-});
+    const newMovie = {
+        id: 'custom-' + Date.now(),
+        title,
+        genre,
+        year,
+        rating,
+        poster: 'movie_posters/inception.jpg',
+        director: 'Self-Added',
+        description: `Custom movie entry added directly to the active collection.`,
+        user: activeProfile
+    };
 
-document.addEventListener('fullscreenchange', () => {
-    if (!document.fullscreenElement) {
-        fullscreenBtn.innerHTML = `
-            <svg class="icon" viewBox="0 0 24 24">
-                <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
-            </svg> Fullscreen`;
-    }
-});
+    movies.unshift(newMovie);
+    closeAddModal();
+    renderMovies();
+    document.getElementById('addMovieForm').reset();
+}
 
-function downloadProject() {
-    window.open('https://www.mediafire.com/file/38i1lw6jokgsyum/FinalProject.rar/file', '_blank');
+function deleteMovie(id) {
+    movies = movies.filter(m => m.id !== id);
+    closeMovieModal();
+    renderMovies();
 }
